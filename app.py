@@ -1,49 +1,44 @@
-# app.py (Flask Backend)
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, jsonify, request
 import pandas as pd
-import os
-import datetime
+from sqlalchemy import create_engine
 
-app = Flask(__name__)
-CORS(app)
+app = Flask(_name_)
 
-EXCEL_FILE = "supermarkt_sales.xlsx"
+# Excel data reading
+def read_excel_data():
+    df = pd.read_excel('supermarkt_sales.xlsx')
+    return df
 
-# Ensure Excel file exists with correct columns
-if not os.path.exists(EXCEL_FILE):
-    df = pd.DataFrame(columns=["timestamp", "category", "value"])
-    df.to_excel(EXCEL_FILE, index=False)
+# SQL data reading
+def read_sql_data():
+    engine = create_engine('sqlite:///sales.db')
+    df = pd.read_sql('SELECT * FROM sales', con=engine)
+    return df
 
-@app.route("/data", methods=["POST"])
-def add_data():
-    """Receive JSON from frontend and store it in Excel"""
-    payload = request.get_json()
-    if not payload:
-        return jsonify({"error": "No JSON received"}), 400
+# Endpoint for Excel data
+@app.route('/api/xlsx', methods=['GET'])
+def get_excel_data():
+    df = read_excel_data()
+    df = df.astype(str)  # convert all columns to string
+    return jsonify(df.to_dict(orient='records'))
 
-    try:
-        category = payload["category"]
-        value = float(payload["value"])
-    except KeyError:
-        return jsonify({"error": "Missing fields"}), 400
+# Endpoint for SQL data
+@app.route('/api/sql', methods=['GET'])
+def get_sql_data():
+    df = read_sql_data()
+    df = df.astype(str)
+    return jsonify(df.to_dict(orient='records'))
 
-    timestamp = payload.get("timestamp", datetime.datetime.utcnow().isoformat())
+# Endpoint for sales data filtering
+@app.route('/api/sales', methods=['GET'])
+def get_sales_data():
+    source = request.args.get('source', 'excel')  # default = excel
+    if source == 'xlsx':
+        df = read_excel_data()
+    else:
+        df = read_sql_data()
+    df = df.astype(str)
+    return jsonify(df.to_dict(orient='records'))
 
-    df = pd.read_excel(EXCEL_FILE)
-    new_row = pd.DataFrame([{"timestamp": timestamp, "category": category, "value": value}])
-    df = pd.concat([df, new_row], ignore_index=True)
-    df.to_excel(EXCEL_FILE, index=False)
-
-    return jsonify({"message": "Data saved", "record": new_row.to_dict(orient="records")[0]}), 201
-
-
-@app.route("/data", methods=["GET"])
-def get_data():
-    """Send Excel data as JSON"""
-    df = pd.read_excel(EXCEL_FILE)
-    return jsonify(df.to_dict(orient="records")), 200
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+if _name_ == '_main_':
+    app.run(debug=True)
